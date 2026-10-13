@@ -22,11 +22,14 @@ public final class ConfigWatcher {
         void onMediaSourceChanged();
 
         void onRotationChanged(int degrees);
+
+        void onCameraSourceChanged();
     }
 
     private final Callback callback;
     private android.database.ContentObserver configObserver;
     private FileObserver configFileObserver;
+    private boolean lastOriginalCamera;
 
     public ConfigWatcher(Callback callback) {
         this.callback = callback;
@@ -41,12 +44,14 @@ public final class ConfigWatcher {
             return; // already initialized
 
         LogUtil.log("【CS】初始化配置监听");
+        lastOriginalCamera = SwitchablePreview.useOriginalCamera();
         configObserver = new android.database.ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange) {
                 super.onChange(selfChange);
                 LogUtil.log("【CS】Provider 配置变更");
                 VideoManager.getConfig().forceReload();
+                notifyCameraSourceChanged();
                 VideoManager.updateVideoPath(false);
                 callback.onMediaSourceChanged();
             }
@@ -73,6 +78,7 @@ public final class ConfigWatcher {
                             LogUtil.log("【CS】文件变更: " + path);
                             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                                 VideoManager.getConfig().forceReload();
+                                notifyCameraSourceChanged();
                                 VideoManager.updateVideoPath(false);
                                 callback.onMediaSourceChanged();
                             }, 200);
@@ -135,6 +141,7 @@ public final class ConfigWatcher {
         String oldStreamUrl = config.getString(ConfigManager.KEY_STREAM_URL, "");
 
         config.updateConfigFromJSON(configJson);
+        notifyCameraSourceChanged();
 
         // Snapshot new values
         String newVideo = config.getString(ConfigManager.KEY_SELECTED_VIDEO, "");
@@ -167,6 +174,14 @@ public final class ConfigWatcher {
             callback.onRotationChanged(newRotation);
         } else {
             LogUtil.log("【CS】配置更新: 无变化");
+        }
+    }
+
+    private void notifyCameraSourceChanged() {
+        boolean original = SwitchablePreview.useOriginalCamera();
+        if (lastOriginalCamera != original) {
+            lastOriginalCamera = original;
+            callback.onCameraSourceChanged();
         }
     }
 

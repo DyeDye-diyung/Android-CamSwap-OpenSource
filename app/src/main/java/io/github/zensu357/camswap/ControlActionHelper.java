@@ -40,6 +40,15 @@ public final class ControlActionHelper {
         configManager.setBoolean(ConfigManager.KEY_OVERLAY_CONTROL_ENABLED, enabled);
     }
 
+    public static boolean toggleOriginalCamera(Context context) {
+        ConfigManager config = new ConfigManager();
+        config.setContext(context);
+        config.forceReload();
+        boolean original = !config.getBoolean(ConfigManager.KEY_USE_ORIGINAL_CAMERA, false);
+        config.setBoolean(ConfigManager.KEY_USE_ORIGINAL_CAMERA, original);
+        return original;
+    }
+
     private static boolean fallbackSwitchVideo(Context context, boolean next) {
         ConfigManager configManager = new ConfigManager();
         configManager.setContext(context);
