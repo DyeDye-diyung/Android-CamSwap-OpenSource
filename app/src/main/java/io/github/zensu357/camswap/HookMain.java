@@ -133,8 +133,14 @@ public class HookMain {
             configWatcher = new ConfigWatcher(new ConfigWatcher.Callback() {
                 @Override
                 public void onMediaSourceChanged() {
-                    playerManager.restartAll();
+                    if (!SwitchablePreview.useOriginalCamera()) playerManager.restartAll();
                     camera2Hook.restartYuvDecoderForSourceChange();
+                }
+
+                @Override
+                public void onCameraSourceChanged() {
+                    Camera1Handler.applyCameraSource();
+                    camera2Hook.onCameraSourceChanged();
                 }
 
                 @Override
@@ -425,6 +431,7 @@ public class HookMain {
         }
 
         ImageReader imageReader = (ImageReader) thisObject;
+        if (SwitchablePreview.useOriginalCamera()) return chain.proceed(args);
         Surface surface = imageReader.getSurface();
         Object result;
         boolean isYuvReader = false;
@@ -501,6 +508,7 @@ public class HookMain {
     }
 
     private void onImageReaderNewInstanceBefore(Object[] args) {
+        if (camera2Hook.shouldSkipImageReaderTracking()) return;
         if (args == null || args.length < 3) {
             return;
         }

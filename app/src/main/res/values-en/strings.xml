@@ -130,6 +130,8 @@
     <string name="notif_channel_name">Camswap Control Service</string>
     <string name="notif_channel_desc">Show Camswap video control</string>
     <string name="overlay_action_rotate">Rotate</string>
+    <string name="overlay_action_original_camera">Real camera</string>
+    <string name="overlay_action_virtual_camera">Virtual camera</string>
     <string name="overlay_action_close">Close</string>
 
     <!-- Home Screen - Version Card -->
