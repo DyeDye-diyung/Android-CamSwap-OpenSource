@@ -27,9 +27,13 @@ public class Camera1Handler implements ICameraHandler {
             .newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private static final Object previewFrameLock = new Object();
     private static final long PREVIEW_FRAME_WAIT_MS = 100L;
+    private static volatile boolean previewRunning;
+    private static volatile boolean originalPreview;
+    private static Camera1Handler activeHandler;
 
     @Override
     public void init(final Api101PackageContext packageContext) {
+        activeHandler = this;
         final ClassLoader classLoader = packageContext.classLoader;
         final String packageName = packageContext.packageName;
         hookSetPreviewTexture(classLoader, packageName);
@@ -66,6 +70,16 @@ public class Camera1Handler implements ICameraHandler {
                         return chain.proceed(args);
                     }
 
+                    HookMain.ori_holder = null;
+                    HookMain.mSurfacetexture = (SurfaceTexture) args[0];
+                    if (SwitchablePreview.useOriginalCamera()) {
+                        HookMain.origin_preview_camera = (Camera) chain.getThisObject();
+                        if (HookMain.fake_SurfaceTexture == null) HookMain.fake_SurfaceTexture = new SurfaceTexture(10);
+                        originalPreview = true;
+                        return chain.proceed(args);
+                    }
+                    originalPreview = false;
+
                     if (HookMain.origin_preview_camera != null
                             && HookMain.origin_preview_camera.equals(chain.getThisObject())) {
                         args[0] = HookMain.fake_SurfaceTexture;
@@ -101,6 +115,12 @@ public class Camera1Handler implements ICameraHandler {
                     HookMain.is_someone_playing = false;
                     LogUtil.log("【CS】开始预览");
                     HookMain.start_preview_camera = (Camera) chain.getThisObject();
+                    boolean original = SwitchablePreview.useOriginalCamera();
+                    if (original != originalPreview) {
+                        if (previewRunning) invokeCameraOrigin(HookMain.start_preview_camera, "stopPreview", new Class<?>[0]);
+                        HookMain.playerManager.releaseCamera1Resources();
+                        if (bindPreviewOutput(HookMain.start_preview_camera, original)) originalPreview = original;
+                    }
 
                     try {
                         android.hardware.Camera.Parameters params = HookMain.start_preview_camera.getParameters();
@@ -120,19 +140,61 @@ public class Camera1Handler implements ICameraHandler {
                         LogUtil.log("【CS】修正 Surface 尺寸异常: " + e.getMessage());
                     }
 
-                    if (HookMain.ori_holder != null) {
+                    if (!SwitchablePreview.useOriginalCamera() && HookMain.ori_holder != null) {
                         prepareHolderPreviewPlayer();
                     }
 
-                    if (HookMain.mSurfacetexture != null) {
+                    if (!SwitchablePreview.useOriginalCamera() && HookMain.mSurfacetexture != null) {
                         prepareTexturePreviewPlayer();
                     }
                 }
             } catch (Throwable t) {
                 LogUtil.log("【CS】startPreview before 异常: " + t);
             }
-            return chain.proceed(args);
+            Object result = chain.proceed(args);
+            previewRunning = true;
+            applyCameraSource();
+            return result;
         });
+    }
+
+    /** Camera1 can rebind its preview output without closing the camera object. */
+    public static synchronized void applyCameraSource() {
+        boolean original = SwitchablePreview.useOriginalCamera();
+        Camera camera = HookMain.start_preview_camera;
+        if (!previewRunning || camera == null || activeHandler == null || original == originalPreview) return;
+        try {
+            invokeCameraOrigin(camera, "stopPreview", new Class<?>[0]);
+            HookMain.playerManager.releaseCamera1Resources();
+            if (bindPreviewOutput(camera, original)) originalPreview = original;
+            if (!originalPreview) {
+                if (HookMain.ori_holder != null) activeHandler.prepareHolderPreviewPlayer();
+                else if (HookMain.mSurfacetexture != null) activeHandler.prepareTexturePreviewPlayer();
+            }
+            invokeCameraOrigin(camera, "startPreview", new Class<?>[0]);
+        } catch (Throwable t) {
+            LogUtil.log("【CS】Camera1 实时切换失败: " + t);
+            try { invokeCameraOrigin(camera, "startPreview", new Class<?>[0]); } catch (Throwable ignored) {}
+        }
+    }
+
+    private static boolean bindPreviewOutput(Camera camera, boolean original) throws Throwable {
+        if (original && HookMain.ori_holder != null) {
+            invokeCameraOrigin(camera, "setPreviewDisplay", new Class<?>[] { SurfaceHolder.class }, HookMain.ori_holder);
+        } else {
+            SurfaceTexture texture = original ? HookMain.mSurfacetexture
+                    : (HookMain.ori_holder != null ? HookMain.c1_fake_texture : HookMain.fake_SurfaceTexture);
+            if (texture == null) return false;
+            invokeCameraOrigin(camera, "setPreviewTexture", new Class<?>[] { SurfaceTexture.class }, texture);
+        }
+        return true;
+    }
+
+    private static Object invokeCameraOrigin(Camera camera, String methodName, Class<?>[] parameterTypes,
+            Object... args) throws Throwable {
+        Method method = Camera.class.getDeclaredMethod(methodName, parameterTypes);
+        return Api101Runtime.requireModule().getInvoker(method)
+                .setType(XposedInterface.Invoker.Type.ORIGIN).invoke(camera, args);
     }
 
     private void hookSetPreviewDisplay(ClassLoader classLoader, String packageName) {
@@ -168,6 +230,8 @@ public class Camera1Handler implements ICameraHandler {
                     HookMain.c1_fake_surface = null;
                     HookMain.c1_fake_surface = new Surface(HookMain.c1_fake_texture);
                 }
+                originalPreview = SwitchablePreview.useOriginalCamera();
+                if (originalPreview) return chain.proceed(args);
                 HookMain.is_hooked = true;
                 HookMain.mcamera1.setPreviewTexture(HookMain.c1_fake_texture);
                 return null;
@@ -193,7 +257,9 @@ public class Camera1Handler implements ICameraHandler {
             if (handlePhotoFake((Camera) chain.getThisObject(), args)) {
                 return null;
             }
-            return chain.proceed(args);
+            Object result = chain.proceed(args);
+            previewRunning = false;
+            return result;
         });
     }
 
@@ -315,7 +381,8 @@ public class Camera1Handler implements ICameraHandler {
     }
 
     private boolean handlePhotoFake(Camera camera, Object[] args) {
-        if (!VideoManager.getConfig().getBoolean(ConfigManager.KEY_ENABLE_PHOTO_FAKE, false)) {
+        if (SwitchablePreview.useOriginalCamera()
+                || !VideoManager.getConfig().getBoolean(ConfigManager.KEY_ENABLE_PHOTO_FAKE, false)) {
             return false;
         }
         LogUtil.log("【CS】Camera1 takePicture 触发，启动动态防御机制");
@@ -533,6 +600,7 @@ public class Camera1Handler implements ICameraHandler {
 
     private void hookStopPreview(ClassLoader classLoader) {
         hookCameraMethod(classLoader, "stopPreview", new Class<?>[0], chain -> {
+            previewRunning = false;
             LogUtil.log("【CS】Camera1 stopPreview，释放播放器资源");
             HookMain.playerManager.releaseCamera1Resources();
             return chain.proceed(toArgs(chain.getArgs()));
@@ -541,6 +609,8 @@ public class Camera1Handler implements ICameraHandler {
 
     private void hookRelease(ClassLoader classLoader) {
         hookCameraMethod(classLoader, "release", new Class<?>[0], chain -> {
+            previewRunning = false;
+            originalPreview = false;
             LogUtil.log("【CS】Camera1 release，释放播放器资源");
             HookMain.playerManager.releaseCamera1Resources();
             HookMain.origin_preview_camera = null;
@@ -578,12 +648,15 @@ public class Camera1Handler implements ICameraHandler {
         if (!hookedPreviewCallbackClasses.add(previewCallbackClass.getName())) {
             return;
         }
-        boolean needStop = HookGuards.shouldBypass(null, HookGuards.getCurrentVideoFile());
         try {
             Method method = previewCallbackClass.getDeclaredMethod("onPreviewFrame", byte[].class, Camera.class);
             method.setAccessible(true);
             Api101Runtime.requireModule().hook(method).intercept(chain -> {
                 Object[] args = toArgs(chain.getArgs());
+                if (SwitchablePreview.useOriginalCamera()
+                        || HookGuards.shouldBypass(null, HookGuards.getCurrentVideoFile())) {
+                    return chain.proceed(args);
+                }
                 try {
                     Camera localcam = (Camera) args[1];
                     if (localcam.equals(HookMain.camera_onPreviewFrame)) {
@@ -610,7 +683,7 @@ public class Camera1Handler implements ICameraHandler {
                                 LogUtil.log("【CS】[toast]" + ee.toString());
                             }
                         }
-                        if (!needStop) {
+                        if (!HookGuards.shouldBypass(null, HookGuards.getCurrentVideoFile())) {
                             if (HookMain.hw_decode_obj == null) {
                                 HookMain.hw_decode_obj = new VideoToFrames();
                             }

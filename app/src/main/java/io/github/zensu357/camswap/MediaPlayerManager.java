@@ -60,6 +60,17 @@ public final class MediaPlayerManager {
         this.currentPackageName = packageName;
     }
 
+    void updateCameraSourceVolume() {
+        float volume = !SwitchablePreview.useOriginalCamera()
+                && VideoManager.getConfig().getBoolean(ConfigManager.KEY_PLAY_VIDEO_SOUND, false) ? 1f : 0f;
+        for (MediaPlayer player : new MediaPlayer[] { c2_player, c2_player_1 }) {
+            if (player != null) {
+                try { player.setVolume(volume, volume); } catch (IllegalStateException ignored) {}
+            }
+        }
+        if (streamBackend != null) streamBackend.setVolume(volume);
+    }
+
     /**
      * Central video path query.
      */

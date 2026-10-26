@@ -12,6 +12,7 @@ Built with Kotlin and Jetpack Compose, CamSwap features cross-process IPC commun
 - Video and Stream Replacement: Replace camera feeds with local video files (MP4) or live streams (RTSP, RTMP, HLS, DASH).
 - Audio Replacement: Synchronize audio with the replaced video or play custom audio tracks.
 - Real-Time Controls: Notification bar shortcuts for switching media, adjusting rotation (+90° / -90°), and toggling playback options.
+- Live Camera Switching: Use the floating control's **Real camera / Virtual camera** button to switch the current preview without reopening the camera page. Photo and frame replacement follow the selected source.
 - Auto Rotation: Automatically parses video orientation metadata and applies correct OpenGL ES rendering.
 - Target App Filtering: Limit hook activation to specific applications.
 - Modern Management UI: Clean Material Design 3 interface built with Jetpack Compose.
@@ -37,6 +38,8 @@ Built with Kotlin and Jetpack Compose, CamSwap features cross-process IPC commun
 
 ### 3. Usage
 Open any selected target application that uses the camera. The preview and capture feeds will be replaced with your selected media.
+
+To switch the current preview back to the physical camera, enable the floating control in settings and grant its overlay permission. Expand the **CS** bubble and tap **Real camera**. Tap **Virtual camera** to return to the selected media. The choice is saved in `cs_config.json` as `use_original_camera`; keep the module enabled while using this control.
 
 ## Storage Path
 
