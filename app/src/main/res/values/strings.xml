@@ -130,6 +130,8 @@
     <string name="notif_channel_name">Camswap控制服务</string>
     <string name="notif_channel_desc">显示Camswap视频切换控制</string>
     <string name="overlay_action_rotate">旋转</string>
+    <string name="overlay_action_original_camera">原始相机</string>
+    <string name="overlay_action_virtual_camera">虚拟相机</string>
     <string name="overlay_action_close">关闭</string>
 
     <!-- Home Screen - Version Card -->

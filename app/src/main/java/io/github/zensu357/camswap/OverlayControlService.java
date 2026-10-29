@@ -111,6 +111,17 @@ public class OverlayControlService extends Service {
         actionPanel.addView(makeSpacer());
         actionPanel.addView(makeActionButton(getString(R.string.overlay_action_rotate), resolveMonetColor(0xFF7D5260),
                 v -> ControlActionHelper.rotateVideo(this)));
+        actionPanel.addView(makeSpacer());
+        ConfigManager config = new ConfigManager();
+        config.setContext(this);
+        boolean original = config.getBoolean(ConfigManager.KEY_USE_ORIGINAL_CAMERA, false);
+        actionPanel.addView(makeActionButton(getString(original
+                        ? R.string.overlay_action_virtual_camera : R.string.overlay_action_original_camera),
+                resolveMonetColor(0xFF386A20), v -> {
+                    boolean useOriginal = ControlActionHelper.toggleOriginalCamera(this);
+                    ((TextView) v).setText(getString(useOriginal
+                            ? R.string.overlay_action_virtual_camera : R.string.overlay_action_original_camera));
+                }));
 
         bubbleView = new TextView(this);
         bubbleView.setText("CS");

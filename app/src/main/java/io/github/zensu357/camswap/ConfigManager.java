@@ -32,6 +32,7 @@ public class ConfigManager {
 
     // Config Keys
     public static final String KEY_DISABLE_MODULE = "disable_module";
+    public static final String KEY_USE_ORIGINAL_CAMERA = "use_original_camera";
     public static final String KEY_PLAY_VIDEO_SOUND = "play_video_sound";
     public static final String KEY_FORCE_PRIVATE_DIR = "force_private_dir";
     public static final String KEY_DISABLE_TOAST = "disable_toast";
